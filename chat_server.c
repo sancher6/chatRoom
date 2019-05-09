@@ -18,6 +18,7 @@ void error(const char *msg)
 
 typedef struct _ThreadArgs {
 	int clisockfd;
+	int *arrpt;
 } ThreadArgs;
 
 void* thread_main(void* args)
@@ -27,6 +28,7 @@ void* thread_main(void* args)
 
 	// get socket descriptor from argument
 	int clisockfd = ((ThreadArgs*) args)->clisockfd;
+	int *clients = ((ThreadArgs*) args)->arrpt; 
 	free(args);
 
 	//-------------------------------
@@ -34,15 +36,20 @@ void* thread_main(void* args)
 	char buffer[256];
 	int nsen, nrcv;
 
+
+
 	nrcv = recv(clisockfd, buffer, 256, 0);
 	if (nrcv < 0) error("ERROR recv() failed");
 
 	while (nrcv > 0) {
-		nsen = send(clisockfd, buffer, nrcv, 0);
-		if (nsen != nrcv) error("ERROR send() failed");
+		while(clients != NULL){
+			nsen = send(*clients, buffer, nrcv, 0);
+			if (nsen != nrcv) error("ERROR send() failed");
 
-		nrcv = recv(clisockfd, buffer, 256, 0);
-		if (nrcv < 0) error("ERROR recv() failed");
+			nrcv = recv(clisockfd, buffer, 256, 0);
+			if (nrcv < 0) error("ERROR recv() failed");
+			clients += sizeof(int); 
+		}
 	}
 
 	close(clisockfd);
@@ -70,9 +77,9 @@ int main(int argc, char *argv[])
 	if (status < 0) error("ERROR on binding");
 
 	listen(sockfd, 5);
-
-	
-
+	int clients[5];
+	int cli_count = 0; 
+	int *p = clients; 
 	while(1) {
 		struct sockaddr_in cli_addr;
 		socklen_t clen = sizeof(cli_addr);
@@ -85,7 +92,11 @@ int main(int argc, char *argv[])
 		ThreadArgs* args = (ThreadArgs*) malloc(sizeof(ThreadArgs));
 		if (args == NULL) error("ERROR creating thread argument");
 		
+		clients[cli_count] = newsockfd; 
+		cli_count += 1; 
+
 		args->clisockfd = newsockfd;
+		args->arrpt = p; 
 
 		pthread_t tid;
 		if (pthread_create(&tid, NULL, thread_main, (void*) args) != 0) error("ERROR creating a new thread");
